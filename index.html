@@ -12,13 +12,16 @@ canvas{display:block;width:100vw;height:100vh}
 <body>
 <canvas id="c"></canvas>
 <script>
-// GREEN PHONE EDIT: HOPPER v5, endless side scroller with templated kinetic obstacles, zones, combos
+// GREEN PHONE EDIT: HOPPER v6, endless side scroller with templated kinetic obstacles, zones, combos
 (()=>{
 const cv=document.getElementById('c'),g=cv.getContext('2d');
 const VH=540,GROUND=460;
 let S=1,VW=960,viewH=540;
-function resize(){const d=Math.min(window.devicePixelRatio||1,2);cv.width=innerWidth*d;cv.height=innerHeight*d;S=Math.min(cv.height/VH,cv.width/720);VW=cv.width/S;viewH=cv.height/S;}
+function resize(){const d=Math.min(window.devicePixelRatio||1,1.5);cv.width=innerWidth*d;cv.height=innerHeight*d;S=Math.min(cv.height/VH,cv.width/720);VW=cv.width/S;viewH=cv.height/S;}
 addEventListener('resize',resize);resize();
+// GREEN PHONE EDIT: on tall phone screens the ground sits at 70 percent height instead of the very bottom
+const yOffNow=()=>Math.max(0,Math.min(viewH-VH,viewH*.7-GROUND));
+const visBottom=()=>camY-yOffNow()+viewH+40;
 
 // GREEN PHONE EDIT: tuning knobs, change feel here
 const T={gravity:2300,jumpV:780,holdGrav:0.45,maxHold:0.45,cutMul:0.5,cruise:200,maxSpeed:640,accel:520,decel:260,wallSlide:140,wallJumpV:740,wallKick:520,kickDecay:7,coyote:0.1,buffer:0.13,hitKick:520,hitUp:520,invuln:0.9};
@@ -354,7 +357,7 @@ function step(dt){
  comboT=Math.max(0,comboT-dt);if(comboT===0)comboN=0;
  const sf=(P.speed-T.cruise)/(T.maxSpeed-T.cruise);
  const tx=P.x-VW*(.3-sf*.1);camX+=(tx-camX)*Math.min(1,dt*8);
- const ty=Math.min(0,P.y+(viewH-VH)-viewH*.45);camY+=(ty-camY)*Math.min(1,dt*6);
+ const ty=Math.min(0,P.y+yOffNow()-viewH*.45);camY+=(ty-camY)*Math.min(1,dt*6);
  shakeA*=Math.exp(-8*dt);flashA*=Math.exp(-4*dt);
  const th=themeAt(P.x).hue;let dh=((th-skyHue+540)%360)-180;skyHue=(skyHue+dh*Math.min(1,dt*1.5)+360)%360;
  const z=Math.floor(Math.max(0,P.x)/ZONE_LEN);if(z>zoneN){zoneN=z;banner={text:'ZONE '+(z+1)+': '+themeAt(P.x).name,t:0};flashA=.7;sfx('zone');}
@@ -370,7 +373,7 @@ function angryFace(cx,ey,w){const er=Math.min(11,w*.14),ex1=cx-w*.2,ex2=cx+w*.2,
  for(const ex of[ex1,ex2]){g.fillStyle='#fff';circle(ex,ey,er);g.fillStyle='#2a1640';circle(ex+Math.cos(ang)*er*.45,ey+Math.sin(ang)*er*.45,er*.5);}
  g.strokeStyle='#2a1640';g.lineWidth=4;g.lineCap='round';g.beginPath();g.moveTo(ex1-er,ey-er-7);g.lineTo(ex1+er,ey-er+1);g.moveTo(ex2+er,ey-er-7);g.lineTo(ex2-er,ey-er+1);g.stroke();
  g.beginPath();g.moveTo(cx-w*.2,ey+er+10);for(let i=1;i<=4;i++)g.lineTo(cx-w*.2+i*w*.1,ey+er+(i%2?4:10));g.stroke();}
-function floorBody(s,h){g.fillStyle=`hsl(${h},75%,74%)`;g.fillRect(s.x,s.y,s.w,s.h);g.fillStyle=`hsl(${h},75%,80%)`;for(let yy=s.y+40;yy<VH+60;yy+=36)g.fillRect(s.x,yy,s.w,8);}
+function floorBody(s,h){g.fillStyle=`hsl(${h},75%,74%)`;g.fillRect(s.x,s.y,s.w,s.h);g.fillStyle=`hsl(${h},75%,80%)`;for(let yy=s.y+40,ye=Math.min(s.y+s.h,visBottom());yy<ye;yy+=36)g.fillRect(s.x,yy,s.w,8);}
 
 function drawSolid(s,p){
  if(s.kind==='hidden')return;
@@ -395,14 +398,14 @@ function drawSolid(s,p){
  if(s.kind==='piston'){const gr=g.createLinearGradient(s.x,0,s.x+s.w,0);gr.addColorStop(0,'#c9d6ff');gr.addColorStop(.5,'#ffffff');gr.addColorStop(1,'#a9b8f0');g.fillStyle=gr;g.fillRect(s.x+10,s.y+20,s.w-20,VH-s.y);
   g.fillStyle=`hsl(${(p.hue+180)%360},90%,62%)`;rr(s.x,s.y,s.w,24,8);g.fill();g.strokeStyle='#fff';g.lineWidth=3;g.stroke();return;}
  if(s.kind==='cannon')return;
- if(s.kind==='pillar'){const gr=g.createLinearGradient(s.x,0,s.x+s.w,0);gr.addColorStop(0,`hsl(${s.hue},90%,70%)`);gr.addColorStop(1,`hsl(${s.hue+40},85%,62%)`);g.fillStyle=gr;const vb=Math.min(s.y+s.h,camY+VH+60);g.fillRect(s.x,s.y,s.w,vb-s.y);
+ if(s.kind==='pillar'){const gr=g.createLinearGradient(s.x,0,s.x+s.w,0);gr.addColorStop(0,`hsl(${s.hue},90%,70%)`);gr.addColorStop(1,`hsl(${s.hue+40},85%,62%)`);g.fillStyle=gr;const vb=Math.min(s.y+s.h,visBottom());g.fillRect(s.x,s.y,s.w,vb-s.y);
   g.fillStyle='rgba(255,255,255,.5)';for(let yy=s.y+30;yy<vb;yy+=50)for(let xx=s.x+16;xx<s.x+s.w-20;xx+=34)g.fillRect(xx,yy,16,22);
   g.fillStyle='#fff';g.fillRect(s.x,s.y,s.w,6);return;}
  if(s.kind==='island'){g.fillStyle='#c9a3ff';g.beginPath();g.moveTo(s.x,s.y+10);g.lineTo(s.x+s.w,s.y+10);g.lineTo(s.x+s.w*.6,s.y+60);g.lineTo(s.x+s.w*.4,s.y+50);g.closePath();g.fill();
   g.fillStyle='#7be08a';rr(s.x,s.y,s.w,20,10);g.fill();g.strokeStyle='#fff';g.lineWidth=3;g.stroke();return;}
 }
-function drawRamp(r,p){const h=p.hue;g.save();g.beginPath();g.moveTo(r.x,r.y0);g.lineTo(r.x+r.w,r.y1);g.lineTo(r.x+r.w,VH+600);g.lineTo(r.x,VH+600);g.closePath();g.clip();
- floorBody({x:r.x,y:Math.min(r.y0,r.y1),w:r.w,h:VH+600},h);g.restore();
+function drawRamp(r,p){const h=p.hue;g.save();g.beginPath();g.moveTo(r.x,r.y0);g.lineTo(r.x+r.w,r.y1);g.lineTo(r.x+r.w,Math.max(VH+600,visBottom()));g.lineTo(r.x,Math.max(VH+600,visBottom()));g.closePath();g.clip();
+ floorBody({x:r.x,y:Math.min(r.y0,r.y1),w:r.w,h:Math.max(VH+600,visBottom())},h);g.restore();
  g.lineCap='butt';g.strokeStyle=`hsl(${h},90%,60%)`;g.lineWidth=16;g.beginPath();g.moveTo(r.x,r.y0+8);g.lineTo(r.x+r.w,r.y1+8);g.stroke();
  g.strokeStyle='rgba(255,255,255,.6)';g.lineWidth=12;g.setLineDash([10,18]);g.lineDashOffset=-r.x;g.beginPath();g.moveTo(r.x,r.y0+8);g.lineTo(r.x+r.w,r.y1+8);g.stroke();g.setLineDash([]);
  g.strokeStyle='#fff';g.lineWidth=3;g.beginPath();g.moveTo(r.x,r.y0+1);g.lineTo(r.x+r.w,r.y1+1);g.stroke();}
@@ -452,7 +455,7 @@ const BGS={
 function drawBG(){const th=THEMES[Math.floor(Math.max(0,P.x)/ZONE_LEN)%THEMES.length],h=skyHue+Math.sin(time*.3)*12,gr=g.createLinearGradient(0,0,0,viewH);gr.addColorStop(0,`hsl(${h},90%,86%)`);gr.addColorStop(1,`hsl(${h+45},95%,95%)`);g.fillStyle=gr;g.fillRect(0,0,VW,viewH);
  const sx=VW*.8,sy=80;g.save();g.translate(sx,sy);g.rotate(time*.2);g.fillStyle='rgba(255,255,255,.35)';for(let i=0;i<12;i++){g.rotate(Math.PI/6);g.beginPath();g.moveTo(0,0);g.lineTo(600,-40);g.lineTo(600,40);g.fill();}g.restore();
  g.fillStyle='#fff3a6';circle(sx,sy,46);g.fillStyle='#ffe066';circle(sx,sy,36);
- const yOff=viewH-VH;
+ const yOff=yOffNow();
  g.fillStyle='rgba(255,255,255,.85)';for(let i=0;i<7;i++){const x=((i*260-camX*.1)%(VW+300)+VW+300)%(VW+300)-150,y=60+((i*73)%140)+yOff*.5;circle(x,y,24);circle(x+26,y-10,30);circle(x+56,y,22);}
  BGS[th.bg](h,yOff);
  // GREEN PHONE EDIT: altitude sky, sparkles and cloud banks as you climb
@@ -467,7 +470,7 @@ function meter(x,y,w,frac,label,hue,align){g.fillStyle='rgba(255,255,255,.8)';rr
 
 function render(){
  g.setTransform(S,0,0,S,0,0);drawBG();
- const yOff=viewH-VH,shx=(Math.random()-.5)*shakeA,shy=(Math.random()-.5)*shakeA;
+ const yOff=yOffNow(),shx=(Math.random()-.5)*shakeA,shy=(Math.random()-.5)*shakeA;
  g.save();g.translate(-camX+shx,-camY+yOff+shy);
  for(const p of pieces){if(p.x>camX+VW+80||p.x+p.w<camX-80)continue;for(const z of p.zones)if(z.updraft)drawUpdraft(z);for(const r of p.ramps)drawRamp(r,p);for(const s of p.solids)drawSolid(s,p);p.draw(p);for(const rg of p.rings)drawRing(rg);for(const st of p.stars)if(!st.got)drawStar(st);}
  for(const q of parts){const a=1-q.life/q.max;g.globalAlpha=a;g.fillStyle=q.kind==='dust'?`hsl(${q.hue},60%,80%)`:`hsl(${q.hue},100%,62%)`;circle(q.x,q.y,q.kind==='trail'?q.size*a:q.size);}g.globalAlpha=1;
