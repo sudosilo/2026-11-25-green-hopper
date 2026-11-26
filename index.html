@@ -12,7 +12,7 @@ canvas{display:block;width:100vw;height:100vh}
 <body>
 <canvas id="c"></canvas>
 <script>
-// GREEN PHONE EDIT: HOPPER v4, endless side scroller with templated kinetic obstacles, zones, combos
+// GREEN PHONE EDIT: HOPPER v5, endless side scroller with templated kinetic obstacles, zones, combos
 (()=>{
 const cv=document.getElementById('c'),g=cv.getContext('2d');
 const VH=540,GROUND=460;
@@ -72,10 +72,10 @@ function star(x,y){return{x,y,got:false,ph:Math.random()*6};}
 function starLine(x0,x1,y,n){const a=[];for(let i=0;i<n;i++)a.push(star(n<2?(x0+x1)/2:x0+(x1-x0)*i/(n-1),y));return a;}
 function starArc(x0,x1,y,h,n){const a=[];for(let i=0;i<n;i++){const t=n<2?.5:i/(n-1);a.push(star(x0+(x1-x0)*t,y-Math.sin(Math.PI*t)*h));}return a;}
 // GREEN PHONE EDIT: v4 sky stretch builder, reused by every flying section
-function skyRun(x,len,y0,d){const rings=[],zones=[],solids=[],stars=[],y1=GROUND-140,n=Math.floor(len/230);
- for(let i=1;i<n;i++){const t=i/n;rings.push({x:x+i*230,y:y0+(y1-y0)*t+Math.sin(t*7)*110,r:36,got:false,ph:Math.random()*6});}
- const nu=1+Math.floor(len/1100);for(let i=0;i<nu;i++){const ux=x+len*(i+.6)/(nu+.2),py=y0+(y1-y0)*((ux-x)/len);zones.push({type:'wind',x:ux,y:py-260,w:130,h:520,force:2700,updraft:true});}
- if(Math.random()<.85){const ix=x+len*rand(.3,.7),iy=y0+(y1-y0)*((ix-x)/len)+130;solids.push({x:ix,y:iy,w:150,h:26,kind:'island',keepWing:true});stars.push(...starLine(ix+20,ix+130,iy-40,3));}
+function skyRun(x,len,y0,d){const rings=[],zones=[],solids=[],stars=[],y1=GROUND-140,n=Math.floor(len/230),up=y=>GROUND-(GROUND-y)*2; // GREEN PHONE EDIT: flight path sits twice as high
+ for(let i=1;i<n;i++){const t=i/n;rings.push({x:x+i*230,y:up(y0+(y1-y0)*t+Math.sin(t*7)*110),r:36,got:false,ph:Math.random()*6});}
+ const nu=1+Math.floor(len/1100);for(let i=0;i<nu;i++){const ux=x+len*(i+.6)/(nu+.2),py=up(y0+(y1-y0)*((ux-x)/len));zones.push({type:'wind',x:ux,y:py-260,w:130,h:520,force:2700,updraft:true});}
+ if(Math.random()<.85){const ix=x+len*rand(.3,.7),iy=up(y0+(y1-y0)*((ix-x)/len))+130;solids.push({x:ix,y:iy,w:150,h:26,kind:'island',keepWing:true});stars.push(...starLine(ix+20,ix+130,iy-40,3));}
  return{rings,zones,solids,stars};}
 function onScreen(x){return x>camX-100&&x<camX+VW+100;}
 
