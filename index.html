@@ -12,7 +12,7 @@ canvas{display:block;width:100vw;height:100vh}
 <body>
 <canvas id="c"></canvas>
 <script>
-// GREEN PHONE EDIT: HOPPER v2, endless side scroller with templated kinetic obstacles, zones, combos
+// GREEN PHONE EDIT: HOPPER v3, endless side scroller with templated kinetic obstacles, zones, combos
 (()=>{
 const cv=document.getElementById('c'),g=cv.getContext('2d');
 const VH=540,GROUND=460;
@@ -62,11 +62,12 @@ case'boing':f0=180;f1=900;d=.3;w='sine';v=.12;break;case'boost':f0=400;f1=1800;d
 o.type=w;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);gn.gain.setValueAtTime(v,t);gn.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(gn).connect(AC.destination);o.start(t);o.stop(t+d+.02);}catch(e){}}
 
 // GREEN PHONE EDIT: player
-const P={x:120,y:GROUND-40,w:40,h:40,vx:0,vy:0,speed:T.cruise,kick:0,grounded:true,ground:null,coyote:0,buffer:0,hold:0,holding:false,wall:0,touchWall:false,inv:0,squash:0,sqv:0,tube:null,wallJumps:0,boostCd:0};
+const P={x:120,y:GROUND-40,w:40,h:40,vx:0,vy:0,speed:T.cruise,kick:0,grounded:true,ground:null,coyote:0,buffer:0,hold:0,holding:false,wall:0,touchWall:false,inv:0,squash:0,sqv:0,tube:null,wallJumps:0,boostCd:0,wallL:0,inShaft:false};
 
 // GREEN PHONE EDIT: helpers for building pieces
-function mk(x,w,o){return Object.assign({x,w,solids:[],hazards:[],portals:[],stars:[],zones:[],bumpers:[],t:0,update(p,dt){p.t+=dt;},draw(){}},o);}
-function floor(x,w){return{x,y:GROUND,w,h:600,kind:'floor'};}
+function mk(x,w,o){return Object.assign({x,w,solids:[],ramps:[],hazards:[],portals:[],stars:[],zones:[],bumpers:[],t:0,update(p,dt){p.t+=dt;},draw(){}},o);}
+function floor(x,w,y){y=y==null?GROUND:y;return{x,y,w,h:600+GROUND-y,kind:'floor'};}
+function surf(r,x){return r.y0+(r.y1-r.y0)*(x-r.x)/r.w;}
 function star(x,y){return{x,y,got:false,ph:Math.random()*6};}
 function starLine(x0,x1,y,n){const a=[];for(let i=0;i<n;i++)a.push(star(n<2?(x0+x1)/2:x0+(x1-x0)*i/(n-1),y));return a;}
 function starArc(x0,x1,y,h,n){const a=[];for(let i=0;i<n;i++){const t=n<2?.5:i/(n-1);a.push(star(x0+(x1-x0)*t,y-Math.sin(Math.PI*t)*h));}return a;}
@@ -78,7 +79,8 @@ function onScreen(x){return x>camX-100&&x<camX+VW+100;}
 // solids: you stand on them and wall jump off them. Give a moving solid dx and dy each update and riders get carried.
 //   solid flags: bounce (spring launch), conveyor (belt speed), crumble (falls after you land).
 // hazards: circle, rect, seg. They bonk you. Set off:true to disable one.
-// zones: wind (lifts you), boost (rockets you forward). bumpers: pinball bounce, no damage, points.
+// ramps: {x,w,y0,y1} slopes you run up or down, keep them gentle (rise under 0.7 of width).
+// zones: wind (lifts you), boost (rockets you forward), shaft (stronger wall kicks for climbing). bumpers: pinball bounce, no damage, points.
 const TEMPLATES={
  flat:{weight:d=>1,build(x,d){const w=rand(260,420);return mk(x,w,{solids:[floor(x,w)],stars:starLine(x+60,x+w-60,GROUND-60,3)});}},
 
@@ -211,7 +213,26 @@ const TEMPLATES={
  pistons:{weight:d=>.5+d*.4,build(x,d){const a=rand(130,180),n=4,pw=70,sg=50,gap=n*pw+(n+1)*sg,b=rand(150,200),sp=rand(1.6,2.2),ps=[];
   for(let i=0;i<n;i++)ps.push({x:x+a+sg+i*(pw+sg),y:GROUND,w:pw,h:600,kind:'piston',dx:0,dy:0,ph:i*1.1});
   return mk(x,a+gap+b,{solids:[floor(x,a),...ps,floor(x+a+gap,b)],stars:ps.map(s=>star(s.x+pw/2,GROUND-230)),
-   update(p,dt){p.t+=dt;for(const s of ps){const ny=GROUND-20-(1+Math.sin(p.t*sp+s.ph))*.5*150;s.dy=ny-s.y;s.y=ny;}}});}}
+   update(p,dt){p.t+=dt;for(const s of ps){const ny=GROUND-20-(1+Math.sin(p.t*sp+s.ph))*.5*150;s.dy=ny-s.y;s.y=ny;}}});}},
+ // GREEN PHONE EDIT: v3 slopes. Ramp up, plateau, then ramp down or stairs down. Sometimes boulders roll down at you.
+ hill:{weight:d=>1,build(x,d){const h=rand(110,190),a=rand(80,140),up=Math.max(rand(220,320),h*1.6),top=rand(160,280),dn=Math.max(rand(220,300),h*1.6),b=rand(100,160),ty=GROUND-h,steps=Math.random()<.45,boulders=Math.random()<.3+d*.5,w=a+up+top+dn+b;
+  const rU={x:x+a,w:up,y0:GROUND,y1:ty},solids=[floor(x,a),floor(x+a+up,top,ty),floor(x+a+up+top+dn,b)],ramps=[rU];
+  if(steps){const n=4,sw=dn/n;for(let i=0;i<n;i++)solids.push({x:x+a+up+top+i*sw,y:ty+h*(i+1)/(n+1),w:sw,h:600,kind:'step'});}
+  else ramps.push({x:x+a+up+top,w:dn,y0:ty,y1:GROUND});
+  const st=starArc(x+a+20,x+a+up+top+dn-20,ty-50,60,6),hz=[];let bt=rand(0,1);
+  return mk(x,w,{solids,ramps,hazards:hz,stars:st,
+   update(p,dt){p.t+=dt;if(!boulders)return;bt-=dt;if(bt<=0&&onScreen(rU.x+rU.w)){bt=rand(1.6,2.6)-d*.6;hz.push({type:'circle',x:x+a+up+top*.7,y:ty-20,r:20,rot:0,v:150});}
+    for(let i=hz.length-1;i>=0;i--){const h2=hz[i];h2.v=Math.min(420,h2.v+(h2.x<rU.x+rU.w?260:0)*dt);h2.x-=h2.v*dt;h2.rot-=h2.v*dt/20;
+     h2.y=(h2.x>rU.x+rU.w?ty:h2.x>rU.x?surf(rU,h2.x):GROUND)-20;if(h2.x<x-200)hz.splice(i,1);}},
+   draw(p){for(const h2 of hz){g.save();g.translate(h2.x,h2.y);g.rotate(h2.rot);g.fillStyle='#b98cff';circle(0,0,20);g.fillStyle='#8a5cd6';circle(-6,-5,5);circle(7,4,4);circle(-2,9,3);g.restore();}}});}},
+
+ // GREEN PHONE EDIT: v3 climbing shaft. Hop into the far wall, it kicks you back into the near wall, hop again, ping pong to the top.
+ shaft:{weight:d=>.6,build(x,d){const pre=rand(150,210),lw=40,gap=100,rw=70,H=rand(380,440),post=rand(200,260),w=pre+lw+gap+rw+post,lx=x+pre,rx=lx+lw+gap,cx=lx+lw+gap/2;
+  const L={x:lx,y:GROUND-H-100,w:lw,h:H+10,kind:'wall'},R={x:rx,y:GROUND-H,w:rw,h:H,kind:'wall',eyes:true};
+  const st=[];for(let yy=GROUND-110;yy>GROUND-H-40;yy-=75)st.push(star(cx,yy));
+  return mk(x,w,{solids:[floor(x,w),L,R],zones:[{type:'shaft',x:lx,y:GROUND-H-260,w:lw+gap+rw,h:H+260}],stars:st,
+   draw(p){for(let i=0;i<4;i++){const yy=GROUND-120-i*90-((time*60)%90);g.fillStyle=`hsla(${(time*200+i*50)%360},100%,60%,.55)`;g.beginPath();g.moveTo(cx-14,yy+10);g.lineTo(cx,yy-6);g.lineTo(cx+14,yy+10);g.lineTo(cx+14,yy+18);g.lineTo(cx,yy+2);g.lineTo(cx-14,yy+18);g.fill();}
+    txt('CLIMB!',lx-40,GROUND-110+Math.sin(time*5)*4,18,'#ff3d8b','center');}});}}
 };
 
 function spawnNext(){const d=Math.min(1,genX/25000);const keys=Object.keys(TEMPLATES).filter(k=>k!==lastT);let tot=0;const ws=keys.map(k=>{const w=TEMPLATES[k].weight(d);tot+=w;return w;});
@@ -245,11 +266,12 @@ function updatePlayer(dt){
  if(P.tube){updateTube(dt);return;}
  const near=nearby(),solids=[];for(const p of near)for(const s of p.solids)if(!s.off)solids.push(s);
  if(leftHeld)P.speed=Math.min(T.maxSpeed,P.speed+T.accel*dt);else P.speed=Math.max(T.cruise,P.speed-T.decel*dt);
- P.kick*=Math.exp(-T.kickDecay*dt);if(Math.abs(P.kick)<5)P.kick=0;
- P.inv=Math.max(0,P.inv-dt);P.buffer-=dt;P.coyote-=dt;P.wall-=dt;P.boostCd-=dt;
+ P.kick*=Math.exp(-(P.inShaft?4:T.kickDecay)*dt);if(Math.abs(P.kick)<5)P.kick=0;
+ P.inv=Math.max(0,P.inv-dt);P.buffer-=dt;P.coyote-=dt;P.wall-=dt;P.wallL-=dt;P.boostCd-=dt;
  if(P.buffer>0){
   if(P.grounded||P.coyote>0){P.vy=-T.jumpV;P.grounded=false;P.ground=null;P.coyote=0;P.buffer=0;P.holding=true;P.hold=0;P.squash=-.35;burst(P.x+P.w/2,P.y+P.h,10,(time*200)%360,180,'dust');sfx('jump');}
-  else if(P.wall>0){P.vy=-T.wallJumpV;P.kick=-T.wallKick;P.wall=0;P.buffer=0;P.holding=true;P.hold=0;P.squash=-.3;burst(P.x+P.w,P.y+P.h/2,16,40,260,'spark');shake(4);sfx('wall');P.wallJumps++;if(P.wallJumps%3===1)popup(P.x+P.w/2,P.y-10,pick(['NINJA!','WALL KICK!','HI-YA!']));}
+  else if(P.wall>0){P.vy=-T.wallJumpV;P.kick=P.inShaft?-900:-T.wallKick;P.wall=0;P.buffer=0;P.holding=true;P.hold=0;P.squash=-.3;burst(P.x+P.w,P.y+P.h/2,16,40,260,'spark');shake(4);sfx('wall');P.wallJumps++;if(P.wallJumps%3===1)popup(P.x+P.w/2,P.y-10,pick(['NINJA!','WALL KICK!','HI-YA!']));}
+  else if(P.wallL>0){P.vy=-T.wallJumpV;P.kick=150;P.wallL=0;P.buffer=0;P.holding=true;P.hold=0;P.squash=-.3;burst(P.x,P.y+P.h/2,16,180,260,'spark');shake(3);sfx('wall');P.wallJumps++;if(P.wallJumps%4===0)popup(P.x+P.w/2,P.y-10,pick(['BOING!','PING!','PONG!']),190);}
  }
  let gm=1;
  if(P.holding){if(rightHeld&&P.hold<T.maxHold){P.hold+=dt;gm=T.holdGrav;}else{if(!rightHeld&&P.vy<0)P.vy*=T.cutMul;P.holding=false;}}
@@ -261,9 +283,12 @@ function updatePlayer(dt){
  P.vx=P.speed+P.kick;P.x+=P.vx*dt;P.touchWall=false;
  for(const s of solids)if(ov(P,s)){
   if(P.vx>0&&P.y+P.h-s.y<=18&&P.vy>=0){P.y=s.y-P.h;continue;} // GREEN PHONE EDIT: auto step up small lips
-  if(P.vx>0){P.x=s.x-P.w;P.touchWall=true;P.wall=.12;}else{P.x=s.x+s.w;P.kick=0;}}
- const wasG=P.grounded;P.grounded=false;P.y+=P.vy*dt;let landed=null;
+  if(P.vx>0){P.x=s.x-P.w;P.touchWall=true;P.wall=.12;}else{P.x=s.x+s.w;if(P.kick<0&&!P.grounded)P.wallL=.14;P.kick=0;}}
+ const wasG=P.grounded;P.grounded=false;P.y+=P.vy*dt;let landed=null;const cx0=P.x+P.w/2;
  for(const s of solids)if(ov(P,s)){if(P.vy>0){P.y=s.y-P.h;if(!wasG&&P.vy>350&&!s.bounce){P.squash=Math.min(.45,P.vy/2000);burst(P.x+P.w/2,P.y+P.h,8,(time*200)%360,140,'dust');sfx('land');}P.vy=0;P.grounded=true;P.coyote=T.coyote;P.holding=false;P.wallJumps=0;landed=s;}else if(P.vy<0){P.y=s.y+s.h;P.vy=0;}}
+ // GREEN PHONE EDIT: slopes, stick to the ramp surface under your middle
+ for(const p of near)for(const r of p.ramps){if(cx0<r.x||cx0>r.x+r.w)continue;const sy=surf(r,cx0),bt=P.y+P.h;if(landed&&sy>bt)continue;
+  if(P.vy>=0&&bt>=sy-(wasG?16:0)&&bt<=sy+40){if(!wasG&&P.vy>350){P.squash=Math.min(.45,P.vy/2000);burst(cx0,sy,8,(time*200)%360,140,'dust');sfx('land');}P.y=sy-P.h;P.vy=0;P.grounded=true;P.coyote=T.coyote;P.holding=false;P.wallJumps=0;landed=r;}}
  P.ground=landed;
  if(landed){
   if(landed.bounce){P.vy=-landed.bounce;P.grounded=false;P.ground=null;P.coyote=0;P.holding=true;P.hold=0;P.squash=-.45;landed.squish=1;sfx('boing');shake(5);burst(P.x+P.w/2,P.y+P.h,20,(time*200)%360,300,'spark');popup(P.x+P.w/2,P.y-20,'BOING!',300);}
@@ -271,10 +296,12 @@ function updatePlayer(dt){
  }
  // GREEN PHONE EDIT: fell in a hole, drop back in from the sky like nothing happened
  if(P.y>VH+80){P.y=-120;P.vy=Math.min(P.vy,250);P.ground=null;popup(P.x+P.w/2,30,'SKY DROP!',200);sfx('sky');}
- const cx=P.x+P.w/2,cy=P.y+P.h/2;
+ const cx=P.x+P.w/2,cy=P.y+P.h/2;let shaftNow=false;
  for(const p of near)for(const z of p.zones)if(P.x<z.x+z.w&&P.x+P.w>z.x&&P.y<z.y+z.h&&P.y+P.h>z.y){
   if(z.type==='wind'){P.vy=Math.max(-420,P.vy-z.force*dt);if(Math.random()<.3)parts.push({x:P.x+rand(0,40),y:P.y+P.h,vx:0,vy:rand(80,160),life:0,max:.3,size:3,hue:200,kind:'dust'});}
+  if(z.type==='shaft')shaftNow=true;
   if(z.type==='boost'&&P.boostCd<=0){P.speed=T.maxSpeed;P.kick=Math.max(P.kick,380);P.boostCd=.6;shake(4);sfx('boost');popup(cx,P.y-20,'BOOST!',30);burst(P.x,cy,20,20,300,'spark');}}
+ P.inShaft=shaftNow;
  for(const p of near)for(const b of p.bumpers)if(b.cd<=0&&circRect(b.x,b.y,b.r+4)){const dx=cx-b.x,dy=cy-b.y,l=Math.hypot(dx,dy)||1;P.vy=(dy/l)*650-280;P.kick=(dx/l)*520;P.ground=null;P.holding=false;b.cd=.25;b.flash=1;pts+=10;popup(b.x,b.y-b.r-12,'+10',b.hue,18);sfx('bump');shake(3);burst(b.x,b.y,12,b.hue,240,'spark');}
  if(P.inv<=0){outer:for(const p of near)for(const h of p.hazards)if(hitHaz(h)){hit();break outer;}}
  for(const p of near)for(const st of p.stars)if(!st.got&&(st.x-cx)**2+(st.y-cy)**2<34*34)getStar(st);
@@ -334,6 +361,11 @@ function drawSolid(s,p){
   g.fillStyle=`hsl(${(p.hue+180)%360},90%,62%)`;rr(s.x,s.y,s.w,24,8);g.fill();g.strokeStyle='#fff';g.lineWidth=3;g.stroke();return;}
  if(s.kind==='cannon')return;
 }
+function drawRamp(r,p){const h=p.hue;g.save();g.beginPath();g.moveTo(r.x,r.y0);g.lineTo(r.x+r.w,r.y1);g.lineTo(r.x+r.w,VH+600);g.lineTo(r.x,VH+600);g.closePath();g.clip();
+ floorBody({x:r.x,y:Math.min(r.y0,r.y1),w:r.w,h:VH+600},h);g.restore();
+ g.lineCap='butt';g.strokeStyle=`hsl(${h},90%,60%)`;g.lineWidth=16;g.beginPath();g.moveTo(r.x,r.y0+8);g.lineTo(r.x+r.w,r.y1+8);g.stroke();
+ g.strokeStyle='rgba(255,255,255,.6)';g.lineWidth=12;g.setLineDash([10,18]);g.lineDashOffset=-r.x;g.beginPath();g.moveTo(r.x,r.y0+8);g.lineTo(r.x+r.w,r.y1+8);g.stroke();g.setLineDash([]);
+ g.strokeStyle='#fff';g.lineWidth=3;g.beginPath();g.moveTo(r.x,r.y0+1);g.lineTo(r.x+r.w,r.y1+1);g.stroke();}
 function drawStar(st){const y=st.y+Math.sin(time*4+st.ph)*5,r=13,rot=time*2+st.ph;g.save();g.translate(st.x,y);g.rotate(rot);g.beginPath();for(let i=0;i<10;i++){const a=i*Math.PI/5,rr2=i%2?r*.45:r;g.lineTo(Math.cos(a)*rr2,Math.sin(a)*rr2);}g.closePath();g.fillStyle='#ffd000';g.fill();g.lineWidth=3;g.strokeStyle='#fff';g.stroke();g.restore();}
 
 // GREEN PHONE EDIT: SKIN REGISTRY. Swap the sprite by adding a skin and setting skin='name'.
@@ -380,7 +412,7 @@ function render(){
  g.setTransform(S,0,0,S,0,0);drawBG();
  const yOff=viewH-VH,shx=(Math.random()-.5)*shakeA,shy=(Math.random()-.5)*shakeA;
  g.save();g.translate(-camX+shx,-camY+yOff+shy);
- for(const p of pieces){if(p.x>camX+VW+80||p.x+p.w<camX-80)continue;for(const s of p.solids)drawSolid(s,p);p.draw(p);for(const st of p.stars)if(!st.got)drawStar(st);}
+ for(const p of pieces){if(p.x>camX+VW+80||p.x+p.w<camX-80)continue;for(const r of p.ramps)drawRamp(r,p);for(const s of p.solids)drawSolid(s,p);p.draw(p);for(const st of p.stars)if(!st.got)drawStar(st);}
  for(const q of parts){const a=1-q.life/q.max;g.globalAlpha=a;g.fillStyle=q.kind==='dust'?`hsl(${q.hue},60%,80%)`:`hsl(${q.hue},100%,62%)`;circle(q.x,q.y,q.kind==='trail'?q.size*a:q.size);}g.globalAlpha=1;
  drawPlayer();
  if(P.touchWall&&!P.grounded&&!P.tube&&Math.floor(time*6)%2===0)txt('HOP!',P.x+P.w/2,P.y-14,16,'#ff3d8b','center');
